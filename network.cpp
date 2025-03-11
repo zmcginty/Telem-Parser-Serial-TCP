@@ -56,6 +56,7 @@ int Network::networkBroadcastMessage() {
     }
 
     std::cout << "Broadcast message sent: " << MESSAGE << std::endl;
+    return 0;
 }
 
 void Network::networkClose() {
