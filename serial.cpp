@@ -19,11 +19,11 @@
 std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
 #endif
 
-#define SERIAL_PORT "/dev/tty.usbserial-2140"  // Change this to match your device
+#define SERIAL_PORT "/dev/ttyUSB0"  // Change this to match your device
 #define DATA_LENGTH 16              // Fixed length of incoming data
 #define DATA "123456789asdcxhe"              // Fixed length of incoming data
 
-#if 0
+// #if 0
 class Serial{
 public:
     int serialSetup();
@@ -33,7 +33,7 @@ public:
 
 private:
     int serial_fd;
-    char* buffer;
+    // char* buffer;
 };
 
 int Serial::serialSetup() {
@@ -77,8 +77,10 @@ int Serial::serialSetup() {
     return 0;
 }
 void Serial::readSerial() {
+    std::cout << "beginning of readSerial" << std::endl;
     // Read fixed-length data
-    buffer[DATA_LENGTH + 1] = {0}; // +1 for null termination
+    char buffer[DATA_LENGTH + 1] = {0}; // +1 for null termination
+    std::cout << "readSerial after buffer" << std::endl;
     int bytes_read = read(serial_fd, buffer, DATA_LENGTH);
     if (bytes_read > 0) {
         buffer[bytes_read] = '\0'; // Ensure null termination
@@ -86,27 +88,28 @@ void Serial::readSerial() {
     } else {
         std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
     }
+    std::cout << "end of readSerial" << std::endl;
 }
 
 void Serial::writeSerial() {
     // Read fixed-length data
     // buffer[DATA_LENGTH + 1] = {0}; // +1 for null termination
     // int bytes_read = read(serial_fd, buffer, DATA_LENGTH);
-    ssize_t	 write(int __fd, const void * __buf, size_t __nbyte) __DARWIN_ALIAS_C(write);
+    // ssize_t	 write(int __fd, const void * __buf, size_t __nbyte) __DARWIN_ALIAS_C(write);
     int bytes_written = write(serial_fd, DATA, DATA_LENGTH);
     if (bytes_written > 0) {
-        std::cout << "Aparently we were successful sending shit " << buffer << std::endl;
+        std::cout << "Aparently we were successful sending shit " << std::endl;
     } else {
-        std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+        std::cerr << "Error writing to serial port: " << strerror(errno) << std::endl;
     }
 }
 
 void Serial::closeSerial() {
     close(serial_fd);
 }
-#endif
+// #endif
 
-// #if 0
+#if 0
 // NON-Blocking Threaded SerialRead
 void Serial::readSerial() {
     int serial_fd = open(SERIAL_PORT, O_RDWR | O_NOCTTY | O_SYNC);
@@ -165,7 +168,7 @@ void Serial::readSerial() {
 
     close(serial_fd);
 }
-// #endif
+#endif
 
 // Boost ASIO
 //////////////////////////////////////////////////////////////////////////////////
