@@ -4,6 +4,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <cstring>
+#include <string>
 
 #define NON_BLOCKING 0  // Change this to match your device
 //for non-blocking threaded serial:
@@ -22,13 +23,14 @@ std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
 #define SERIAL_PORT "/dev/ttyUSB0"  // Change this to match your device
 #define DATA_LENGTH 16              // Fixed length of incoming data
 #define DATA "123456789asdcxhe"              // Fixed length of incoming data
+#define DATA2 "FFFFFFFFFFFFFFFF"              // Fixed length of incoming data
 
 // #if 0
 class Serial{
 public:
     int serialSetup();
     void readSerial();
-    void writeSerial();
+    void writeSerial(std::string writeData);
     void closeSerial();
 
 private:
@@ -91,12 +93,13 @@ void Serial::readSerial() {
     std::cout << "end of readSerial" << std::endl;
 }
 
-void Serial::writeSerial() {
-    // Read fixed-length data
-    // buffer[DATA_LENGTH + 1] = {0}; // +1 for null termination
-    // int bytes_read = read(serial_fd, buffer, DATA_LENGTH);
-    // ssize_t	 write(int __fd, const void * __buf, size_t __nbyte) __DARWIN_ALIAS_C(write);
-    int bytes_written = write(serial_fd, DATA, DATA_LENGTH);
+void Serial::writeSerial(std::string writeData) {
+    if(writeData.length() > 16){
+        std::cout << "writeData length too long" << std::endl;
+        return;
+    }
+    // char[DATA_LENGTH] dataToWrite = writeData;
+    int bytes_written = write(serial_fd, writeData.c_str(), DATA_LENGTH);
     if (bytes_written > 0) {
         std::cout << "Aparently we were successful sending shit " << std::endl;
     } else {

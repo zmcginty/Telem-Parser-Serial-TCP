@@ -10,7 +10,9 @@ int main() {
     std::cout << "made serial and network objs " << std::endl;
     serialPort.serialSetup();
     std::cout << "after serial port setup " << std::endl;
-    serialPort.writeSerial(); 
+    // char[16] writeData = "123456789asdcxhe";
+    // serialPort.writeSerial("123456789asdcxhe"); 
+    serialPort.writeSerial(   "FFFFFFFFFFFFFFFF"); 
     std::cout << "after serial write " << std::endl;
     serialPort.readSerial();
 
