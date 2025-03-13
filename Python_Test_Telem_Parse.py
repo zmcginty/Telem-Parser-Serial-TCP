@@ -5,7 +5,7 @@ import socket
 import threading
 
 # Define serial port and baud rate
-SERIAL_PORT = "/dev/tty.usbserial-2140"  # Adjust for your OS (Windows: "COM3", Linux/Mac: "/dev/ttyUSB0")
+SERIAL_PORT = "/dev/ttyUSB0"  # Adjust for your OS (Windows: "COM3", Linux/Mac: "/dev/ttyUSB0")
 BAUD_RATE = 9600
 # Definition of packet structure
 PACKET_FORMAT = "BBBBIfff"  # (uint8, uint8, uint8, uint32, float, float, float)

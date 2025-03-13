@@ -4,9 +4,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define BROADCAST_IP "255.255.255.255" // Broadcast address (change for your subnet)
-#define BROADCAST_PORT 5000            // Port to broadcast on
-// #define MESSAGE "Hello, Network!"       // Message to send
+#define BROADCAST_IP "10.0.0.255" // broadcast address 
+#define BROADCAST_PORT 5000            // broadcast port 
 
 class Network{
 public:
@@ -55,8 +54,6 @@ int Network::networkBroadcastMessage(const void* buffer, size_t buffer_len) {
         close(sockfd);
         return 1;
     }
-
-    // std::cout << "Broadcast message sent: " << MESSAGE << std::endl;
     return 0;
 }
 

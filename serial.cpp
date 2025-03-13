@@ -22,18 +22,17 @@
 std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
 #endif
 
-#define SERIAL_PORT "/dev/ttyUSB0"  // Change this to match your device
-#define DATA_LENGTH 16              // Fixed length of incoming data
-#define DATA "123456789asdcxhe"              // Fixed length of incoming data
-#define DATA2 "FFFFFFFFFFFFFFFF"              // Fixed length of incoming data
+#define SERIAL_PORT "/dev/ttyUSB1"
+#define DATA_LENGTH 16
+#define DATA "123456789asdcxhe"
+#define DATA2 "FFFFFFFFFFFFFFFF"
 
 // #if 0
 class Serial{
 public:
     int serialSetup();
     std::vector<uint8_t> readSerial();
-    // void readSerial();
-    void writeSerial(std::string writeData);
+    int writeSerial(std::vector<uint8_t> writeData);
     void closeSerial();
 
 private:
@@ -41,7 +40,7 @@ private:
     //Do I want packet_count and num_missed_packets HERE?????
     // uint32_t packet_count;
     // size_t num_missed_packets = 0;
-    // char* buffer;
+    // Also, do I want to store a serial buffer????
 };
 
 int Serial::serialSetup() {
@@ -125,17 +124,14 @@ std::vector<uint8_t> Serial::readSerial() {
     // }
 }
 
-void Serial::writeSerial(std::string writeData) {
-    if(writeData.length() > 16){
-        std::cout << "writeData length too long" << std::endl;
-        return;
-    }
-    // char[DATA_LENGTH] dataToWrite = writeData;
-    int bytes_written = write(serial_fd, writeData.c_str(), DATA_LENGTH);
-    if (bytes_written > 0) {
-        std::cout << "Aparently we were successful sending shit " << std::endl;
-    } else {
+int Serial::writeSerial(std::vector<uint8_t> writeData) {
+    int bytes_written = write(serial_fd, writeData.data(), writeData.size());
+    if (bytes_written <= 0) {
         std::cerr << "Error writing to serial port: " << strerror(errno) << std::endl;
+        return -1;
+    } else {
+        // std::cout << "Aparently we were successful sending shit " << std::endl;
+        return bytes_written;
     }
 }
 
