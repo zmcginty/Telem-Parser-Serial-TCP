@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <cstring>
 #include <string>
+#include <array>
+#include <vector>
 
 #define NON_BLOCKING 0  // Change this to match your device
 //for non-blocking threaded serial:
@@ -29,24 +31,28 @@ std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
 class Serial{
 public:
     int serialSetup();
-    void readSerial();
+    std::vector<uint8_t> readSerial();
+    // void readSerial();
     void writeSerial(std::string writeData);
     void closeSerial();
 
 private:
     int serial_fd;
+    //Do I want packet_count and num_missed_packets HERE?????
+    // uint32_t packet_count;
+    // size_t num_missed_packets = 0;
     // char* buffer;
 };
 
 int Serial::serialSetup() {
-    std::cout << "before open port " << std::endl;
+    // std::cout << "before open port " << std::endl;
     serial_fd = open(SERIAL_PORT, O_RDWR | O_NOCTTY | O_SYNC);
-    std::cout << "successfully opened port" << std::endl;
+    // std::cout << "successfully opened port" << std::endl;
     if (serial_fd < 0) {
         std::cerr << "Error opening serial port: " << strerror(errno) << std::endl;
         return 1;
     }
-    std::cout << "successfully opened serial_port " << std::endl;
+    // std::cout << "successfully opened serial_port " << std::endl;
 
     struct termios tty;
     memset(&tty, 0, sizeof tty);
@@ -55,7 +61,7 @@ int Serial::serialSetup() {
         close(serial_fd);
         return 1;
     }
-    std::cout << "successfully got terminal attributes " << std::endl;
+    // std::cout << "successfully got terminal attributes " << std::endl;
 
     // Configure serial port settings
     cfsetospeed(&tty, B9600);  // Set baud rate to 9600
@@ -73,24 +79,50 @@ int Serial::serialSetup() {
         close(serial_fd);
         return 1;
     }
-    std::cout << "successfully set terminal attributes " << std::endl;
+    // std::cout << "successfully set terminal attributes " << std::endl;
 
 
     return 0;
 }
-void Serial::readSerial() {
-    std::cout << "beginning of readSerial" << std::endl;
+
+//MAYBE want to change read function to read one byte at a time..... to look for frame_start byte(s) or read 4 bytes at a time so I can look for all 4 frame_start bytes.
+// Function to read from serial (single threaded, blocking... need to make threaded eventually)
+std::vector<uint8_t> Serial::readSerial() {
+    // std::cout << "readSerial start\n";
     // Read fixed-length data
-    char buffer[DATA_LENGTH + 1] = {0}; // +1 for null termination
-    std::cout << "readSerial after buffer" << std::endl;
-    int bytes_read = read(serial_fd, buffer, DATA_LENGTH);
-    if (bytes_read > 0) {
-        buffer[bytes_read] = '\0'; // Ensure null termination
-        std::cout << "Received data: " << buffer << std::endl;
-    } else {
-        std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+    std::vector<uint8_t> packet_buffer;
+    // char* byte_buffer;
+    uint8_t byte_buffer[1];
+    // int bytes_read = read(serial_fd, packet_buffer, DATA_LENGTH);
+    // How do you consume a whole packet??? One byte at a time.
+    int bytes_read = read(serial_fd, byte_buffer, 1);
+    // std::cout << "readSerial read first byte\n";
+    // I think I'll need a way to check when the next byte is available....?? I'm doing it live here...
+    // Here we're looking for the first frame_start byte. Once we get it we'll add it to the packet_buffer which we'll de-serialize
+    while(bytes_read > 0 && byte_buffer[0] != 0x7F) {
+        // std::cout << "bytes read > 0, and byte != 0x7F\n";
+        int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
     }
-    std::cout << "end of readSerial" << std::endl;
+    packet_buffer.push_back(byte_buffer[0]);
+    // If we get here, we SHOULD be at the start of a frame/packet.
+    for(size_t i=0; i<DATA_LENGTH-1; i++) {
+        int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
+        if(bytes_read <= 0) {
+            std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+        }
+        packet_buffer.push_back(byte_buffer[0]);
+    }
+    return packet_buffer;
+    // if (bytes_read > 0) {
+    //     // packet_buffer[bytes_read] = '\0'; // Ensure null termination
+    //     // std::cout << "Received data: " << packet_buffer << std::endl;
+    //     // I KNOW; probably not the most efficient way of doing it... but it works for now.
+    //     // std::array<uint8_t, 16> packet;
+    //     // std::memcpy(packet.data(), packet_buffer, 16);
+    //     return packet;
+    // } else {
+    //     std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+    // }
 }
 
 void Serial::writeSerial(std::string writeData) {

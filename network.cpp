@@ -6,12 +6,13 @@
 
 #define BROADCAST_IP "255.255.255.255" // Broadcast address (change for your subnet)
 #define BROADCAST_PORT 5000            // Port to broadcast on
-#define MESSAGE "Hello, Network!"       // Message to send
+// #define MESSAGE "Hello, Network!"       // Message to send
 
 class Network{
 public:
     int networkSetup();
-    int networkBroadcastMessage();
+    int networkBroadcastMessage(const void* buffer, size_t buffer_len);
+    // int networkBroadcastMessage();
     void networkClose();
 
 private:
@@ -42,20 +43,20 @@ int Network::networkSetup() {
     broadcastAddr.sin_port = htons(BROADCAST_PORT);
     broadcastAddr.sin_addr.s_addr = inet_addr(BROADCAST_IP);
 
-    close(sockfd);
+    // close(sockfd);
     return 0;
 }
 
-int Network::networkBroadcastMessage() {
+int Network::networkBroadcastMessage(const void* buffer, size_t buffer_len) {
     // Send broadcast message
-    if (sendto(sockfd, MESSAGE, strlen(MESSAGE), 0, 
+    if (sendto(sockfd, buffer, buffer_len, 0, 
                (struct sockaddr*)&broadcastAddr, sizeof(broadcastAddr)) < 0) {
         std::cerr << "Error sending broadcast message!" << std::endl;
         close(sockfd);
         return 1;
     }
 
-    std::cout << "Broadcast message sent: " << MESSAGE << std::endl;
+    // std::cout << "Broadcast message sent: " << MESSAGE << std::endl;
     return 0;
 }
 
