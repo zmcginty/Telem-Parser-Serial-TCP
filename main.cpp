@@ -4,17 +4,23 @@
 #include <cstdint>
 #include <iomanip>
 
-// TODO: Modify this....
-struct TCPPacketStructure {
-    uint8_t frame_start_7F;
-    uint8_t frame_start_F0;
-    uint8_t frame_start_1C;
-    uint8_t frame_start_AF;
+class TelemRxTx {
+public:
+    TelemRxTx() {
+        //setup network port
+        networkPort.networkSetup();
+        //Serial-ey stuffs
+        serialPort.serialSetup();
+    }
+    void printRxPkt();
+private:
+    Network networkPort;
+    Serial serialPort;
+    std::vector<uint8_t> packet;
     uint32_t packet_count;
-    float gyro_x_rate;
-    float gyro_y_rate;
-    float gyro_z_rate;
+    size_t num_missed_packets = 0;
 };
+
 struct SerialPacketStructure {
     uint8_t frame_start_7F;
     uint8_t frame_start_F0;
@@ -25,36 +31,23 @@ struct SerialPacketStructure {
     float gyro_y_rate;
     float gyro_z_rate;
 };
-
-int main() {
-    Network networkPort;
-    Serial serialPort;
-
-    uint32_t packet_count;
-    size_t num_missed_packets = 0;
     
-    //setup network port
-    networkPort.networkSetup();
-    
-    #define MESSAGE "BOOOOOOOOOOOOP" 
-    // networkPort.networkBroadcastMessage(MESSAGE, strlen(MESSAGE));
-    //Serial-ey stuffs
-    // std::cout << "made serial and network objs " << std::endl;
-    serialPort.serialSetup();
-    // std::cout << "after serial port setup " << std::endl;
-    // char[16] writeData = "123456789asdcxhe";
-    // serialPort.writeSerial("123456789asdcxhe"); 
-    // serialPort.writeSerial("FFFFFFFFFFFFFFFF"); 
-    // std::cout << "after serial write " << std::endl;
-    std::vector<uint8_t> packet = serialPort.readSerial();
-    
-    // print out raw packet data in hex which we received.
+// function to print out raw packet data in hex which we received.
+void TelemRxTx::printRxPkt() {
     std::cout << "packet_array data = ";
     for(uint8_t byte : packet) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte) << " ";
-        // std::cout << std::hex << static_cast<int>(byte) << " ";
     }
     std::cout << std::dec << std::endl;
+}
+
+int main() {
+    //testing network comms
+    // #define MESSAGE "BOOOOOOOOOOOOP" 
+    // networkPort.networkBroadcastMessage(MESSAGE, strlen(MESSAGE));
+    TelemRxTx telem_handler;
+    telem_handler packet = serialPort.readSerial();
+    
 
     // Time to unpack && parse packet
     //      probs want to put it into some kind of buffer/queue or something since the networking stuff might be running in its own thread.
