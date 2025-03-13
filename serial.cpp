@@ -7,34 +7,53 @@
 #include <string>
 #include <array>
 #include <vector>
-
-//for non-blocking threaded serial:
-#if 0
 #include <thread>
 #include <atomic>
 #include <sys/ioctl.h>
-std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
-#endif
+#include <chrono>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 
 #define SERIAL_PORT "/dev/ttyUSB1"
-#define DATA_LENGTH 16
-#define DATA "123456789asdcxhe"
-#define DATA2 "FFFFFFFFFFFFFFFF"
 
-// #if 0
 class Serial{
 public:
-    int serialSetup();
-    std::vector<uint8_t> readSerial();
+    Serial() {
+        if(serialSetup() == 1){
+            //serial_setup failed
+        }
+        running = false;
+    }
+    ~Serial() {
+        if(serial_fd >=0){
+            stop();
+            closeSerial();
+        }
+    }
+    void start() {
+        running = true;
+        std::thread(&Serial::serialThread, this).detach();
+    }
+    void stop() {
+        running = true;
+    }
+    bool getPacket(std::vector<uint8_t> &packet);
+
+    // std::vector<uint8_t> readSerial();
     int writeSerial(std::vector<uint8_t> writeData);
     void closeSerial();
 
 private:
+    size_t packetSize = 20;
+    const uint8_t startOfFrame = 0x7F;
+    int serialSetup();
+    void serialThread();
     int serial_fd;
-    //Do I want packet_count and num_missed_packets HERE?????
-    // uint32_t packet_count;
-    // size_t num_missed_packets = 0;
-    // Also, do I want to store a serial buffer????
+    std::queue<std::vector<uint8_t>> packetQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondVar;
+    std::atomic<bool> running; // for thread control
 };
 
 int Serial::serialSetup() {
@@ -57,13 +76,13 @@ int Serial::serialSetup() {
     // std::cout << "successfully got terminal attributes " << std::endl;
 
     // Configure serial port settings
-    cfsetospeed(&tty, B9600);  // Set baud rate to 9600
-    cfsetispeed(&tty, B9600);
+    cfsetospeed(&tty, B921600);  // Set baud rate to 9600
+    cfsetispeed(&tty, B921600);
     tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8; // 8-bit characters
     tty.c_iflag &= ~IGNBRK;  // Disable break processing
     tty.c_lflag = 0;         // No signaling characters, no echo, no canonical processing
     tty.c_oflag = 0;         // No remapping, no delays
-    tty.c_cc[VMIN]  = DATA_LENGTH; // Read exactly DATA_LENGTH bytes
+    tty.c_cc[VMIN]  = packetSize; // Read exactly DATA_LENGTH bytes
     tty.c_cc[VTIME] = 10;    // Timeout (in tenths of a second)
 
     // Apply settings
@@ -72,36 +91,70 @@ int Serial::serialSetup() {
         close(serial_fd);
         return 1;
     }
-    // std::cout << "successfully set terminal attributes " << std::endl;
-
-
     return 0;
 }
 
-// Function to read from serial (single threaded, blocking... need to make threaded eventually)
-std::vector<uint8_t> Serial::readSerial() {
-    std::vector<uint8_t> packet_buffer;
-    uint8_t byte_buffer[1];
-    // How do you consume a whole packet??? One byte at a time.
-    int bytes_read = read(serial_fd, byte_buffer, 1);
-    // I think I'll need a way to check when the next byte is available....?? I'm doing it live here...
-    // Here we're looking for the first frame_start byte. Once we get it we'll add it to the packet_buffer which we'll de-serialize
-    while(bytes_read > 0 && byte_buffer[0] != 0x7F) {
-        // std::cout << "bytes read > 0, and byte != 0x7F\n";
-        int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
-    }
-    // push the first frame_start byte we just checked
-    packet_buffer.push_back(byte_buffer[0]);
-    // If we get here, we SHOULD be at the start of a frame/packet. So we'll loop throug the DATA_LENGTH-1 rest of them
-    for(size_t i=0; i<DATA_LENGTH-1; i++) {
-        int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
-        if(bytes_read <= 0) {
-            std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+void Serial::serialThread() {
+    std::vector<uint8_t> buffer;
+    uint8_t byte;
+
+    if(read(serial_fd, &byte, 1) > 0) {
+        if(byte == startOfFrame) {
+            buffer.clear();
+            buffer.push_back(byte);
+
+            for(size_t i = 1; i< packetSize; ++i) {
+                if(read(serial_fd, &byte, 1) > 0) {
+                    buffer.push_back(byte);
+                }
+                else{
+                    break;
+                }
+            }
+            if(buffer.size() == packetSize) {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                packetQueue.push(buffer);
+                queueCondVar.notify_one();
+            }
         }
-        packet_buffer.push_back(byte_buffer[0]);
     }
-    return packet_buffer;
 }
+
+bool Serial::getPacket(std::vector<uint8_t> &packet) {
+    std::unique_lock<std::mutex> lock(queueMutex);
+    queueCondVar.wait(lock, [this] { return !packetQueue.empty(); });
+    packet = packetQueue.front();
+    packetQueue.pop();
+    return true;
+}
+
+// std::vector<uint8_t> Serial::readSerial() {
+//     std::vector<uint8_t> packet_buffer;
+//     uint8_t byte_buffer[1];
+//     // How do you consume a whole packet??? One byte at a time.
+//     while(running){
+//         int bytes_read = read(serial_fd, byte_buffer, 1);
+//         // I think I'll need a way to check when the next byte is available....?? I'm doing it live here...
+//         // Here we're looking for the first frame_start byte. Once we get it we'll add it to the packet_buffer which we'll de-serialize
+//         while(bytes_read > 0 && byte_buffer[0] != 0x7F) {
+//             // std::cout << "bytes read > 0, and byte != 0x7F\n";
+//             int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
+//         }
+//         std::this_thread::sleep_for(std::chrono::milliseconds(1));  //NOTE: Adjust this to achieve 80ms inter-packet timing
+//     }
+//     // push the first frame_start byte we just checked
+//     packet_buffer.push_back(byte_buffer[0]);
+//     // If we get here, we SHOULD be at the start of a frame/packet. So we'll loop throug the DATA_LENGTH-1 rest of them
+//     for(size_t i=0; i<DATA_LENGTH-1; i++) {
+//         int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
+//         if(bytes_read <= 0) {
+//             std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+//         }
+//         packet_buffer.push_back(byte_buffer[0]);
+//     }
+//     return packet_buffer;
+// }
+    
 
 // function to write out to serial
 int Serial::writeSerial(std::vector<uint8_t> writeData) {
@@ -118,68 +171,31 @@ int Serial::writeSerial(std::vector<uint8_t> writeData) {
 void Serial::closeSerial() {
     close(serial_fd);
 }
-// #endif
 
-#if 0
-// NON-Blocking Threaded SerialRead
-void Serial::readSerial() {
-    int serial_fd = open(SERIAL_PORT, O_RDWR | O_NOCTTY | O_SYNC);
-    if (serial_fd < 0) {
-        std::cerr << "Error opening serial port: " << strerror(errno) << std::endl;
-        return;
-    }
-
-    struct termios tty;
-    memset(&tty, 0, sizeof tty);
-    if (tcgetattr(serial_fd, &tty) != 0) {
-        std::cerr << "Error getting terminal attributes: " << strerror(errno) << std::endl;
-        close(serial_fd);
-        return;
-    }
-
-    // Configure serial settings
-    cfsetospeed(&tty, B9600);
-    cfsetispeed(&tty, B9600);
-    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
-    tty.c_iflag &= ~IGNBRK;
-    tty.c_lflag = 0;
-    tty.c_oflag = 0;
-    tty.c_cc[VMIN]  = 0;   // Don't block
-    tty.c_cc[VTIME] = 0;   // No timeout
-
-    if (tcsetattr(serial_fd, TCSANOW, &tty) != 0) {
-        std::cerr << "Error setting terminal attributes: " << strerror(errno) << std::endl;
-        close(serial_fd);
-        return;
-    }
-
-    while (keepRunning) {
-        int bytes_available = 0;
-
-        // Check available bytes
-        if (ioctl(serial_fd, FIONREAD, &bytes_available) < 0) {
-            std::cerr << "Error checking available bytes: " << strerror(errno) << std::endl;
-            break;
-        }
-
-        if (bytes_available >= DATA_LENGTH) {
-            char buffer[DATA_LENGTH + 1] = {0};
-            int bytes_read = read(serial_fd, buffer, DATA_LENGTH);
-
-            if (bytes_read > 0) {
-                buffer[bytes_read] = '\0'; // Null terminate for safety
-                std::cout << "Received: " << buffer << std::endl;
-            } else {
-                std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
-            }
-        }
-
-        usleep(10000); // Sleep 10ms to prevent CPU overuse
-    }
-
-    close(serial_fd);
-}
-#endif
+// // Function to read from serial (single threaded, blocking... need to make threaded eventually)
+// std::vector<uint8_t> Serial::readSerial() {
+//     std::vector<uint8_t> packet_buffer;
+//     uint8_t byte_buffer[1];
+//     // How do you consume a whole packet??? One byte at a time.
+//     int bytes_read = read(serial_fd, byte_buffer, 1);
+//     // I think I'll need a way to check when the next byte is available....?? I'm doing it live here...
+//     // Here we're looking for the first frame_start byte. Once we get it we'll add it to the packet_buffer which we'll de-serialize
+//     while(bytes_read > 0 && byte_buffer[0] != 0x7F) {
+//         // std::cout << "bytes read > 0, and byte != 0x7F\n";
+//         int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
+//     }
+//     // push the first frame_start byte we just checked
+//     packet_buffer.push_back(byte_buffer[0]);
+//     // If we get here, we SHOULD be at the start of a frame/packet. So we'll loop throug the DATA_LENGTH-1 rest of them
+//     for(size_t i=0; i<DATA_LENGTH-1; i++) {
+//         int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
+//         if(bytes_read <= 0) {
+//             std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
+//         }
+//         packet_buffer.push_back(byte_buffer[0]);
+//     }
+//     return packet_buffer;
+// }
 
 // Boost ASIO
 //////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@ import threading
 
 # Define serial port and baud rate
 SERIAL_PORT = "/dev/ttyUSB0"  # Adjust for your OS (Windows: "COM3", Linux/Mac: "/dev/ttyUSB0")
-BAUD_RATE = 9600
+BAUD_RATE = 921600
 # Definition of packet structure
 PACKET_FORMAT = "BBBBIfff"  # (uint8, uint8, uint8, uint32, float, float, float)
 # Broadcast listening port
@@ -18,9 +18,9 @@ frame_start_F0 = 0xF0         # 1 byte (uint8)
 frame_start_1C = 0x1C         # 1 byte (uint8)
 frame_start_AF = 0xAF         # 1 byte (uint8)
 packet_count = 0x00000000 # 4 bytes (uint32)
-gyro_x_rate = 00.00       # 4 bytes (float)
-gyro_y_rate = 00.00       # 4 bytes (float)
-gyro_z_rate = 00.00       # 4 bytes (float)
+gyro_x_rate = 01.00       # 4 bytes (float)
+gyro_y_rate = 02.00       # 4 bytes (float)
+gyro_z_rate = 03.00       # 4 bytes (float)
 
 # Pack the data into a 16-byte binary packet
 packet = struct.pack(PACKET_FORMAT, frame_start_7F, frame_start_F0, frame_start_1C, frame_start_AF, packet_count, gyro_x_rate, gyro_y_rate, gyro_z_rate)
