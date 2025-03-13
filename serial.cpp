@@ -8,17 +8,11 @@
 #include <array>
 #include <vector>
 
-#define NON_BLOCKING 0  // Change this to match your device
 //for non-blocking threaded serial:
 #if 0
-#include <iostream>
 #include <thread>
 #include <atomic>
-#include <fcntl.h>
-#include <termios.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
-#include <cstring>
 std::atomic<bool> keepRunning(true); // Atomic flag to control the thread
 #endif
 
@@ -84,26 +78,21 @@ int Serial::serialSetup() {
     return 0;
 }
 
-//MAYBE want to change read function to read one byte at a time..... to look for frame_start byte(s) or read 4 bytes at a time so I can look for all 4 frame_start bytes.
 // Function to read from serial (single threaded, blocking... need to make threaded eventually)
 std::vector<uint8_t> Serial::readSerial() {
-    // std::cout << "readSerial start\n";
-    // Read fixed-length data
     std::vector<uint8_t> packet_buffer;
-    // char* byte_buffer;
     uint8_t byte_buffer[1];
-    // int bytes_read = read(serial_fd, packet_buffer, DATA_LENGTH);
     // How do you consume a whole packet??? One byte at a time.
     int bytes_read = read(serial_fd, byte_buffer, 1);
-    // std::cout << "readSerial read first byte\n";
     // I think I'll need a way to check when the next byte is available....?? I'm doing it live here...
     // Here we're looking for the first frame_start byte. Once we get it we'll add it to the packet_buffer which we'll de-serialize
     while(bytes_read > 0 && byte_buffer[0] != 0x7F) {
         // std::cout << "bytes read > 0, and byte != 0x7F\n";
         int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
     }
+    // push the first frame_start byte we just checked
     packet_buffer.push_back(byte_buffer[0]);
-    // If we get here, we SHOULD be at the start of a frame/packet.
+    // If we get here, we SHOULD be at the start of a frame/packet. So we'll loop throug the DATA_LENGTH-1 rest of them
     for(size_t i=0; i<DATA_LENGTH-1; i++) {
         int bytes_read = read(serial_fd, byte_buffer, 1);   //This SHOULD read the NEXT byte
         if(bytes_read <= 0) {
@@ -112,18 +101,9 @@ std::vector<uint8_t> Serial::readSerial() {
         packet_buffer.push_back(byte_buffer[0]);
     }
     return packet_buffer;
-    // if (bytes_read > 0) {
-    //     // packet_buffer[bytes_read] = '\0'; // Ensure null termination
-    //     // std::cout << "Received data: " << packet_buffer << std::endl;
-    //     // I KNOW; probably not the most efficient way of doing it... but it works for now.
-    //     // std::array<uint8_t, 16> packet;
-    //     // std::memcpy(packet.data(), packet_buffer, 16);
-    //     return packet;
-    // } else {
-    //     std::cerr << "Error reading from serial port: " << strerror(errno) << std::endl;
-    // }
 }
 
+// function to write out to serial
 int Serial::writeSerial(std::vector<uint8_t> writeData) {
     int bytes_written = write(serial_fd, writeData.data(), writeData.size());
     if (bytes_written <= 0) {
